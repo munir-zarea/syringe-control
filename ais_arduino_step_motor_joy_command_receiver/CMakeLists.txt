@@ -1,0 +1,33 @@
+cmake_minimum_required(VERSION 3.5)
+project(ais_arduino_step_motor_joy_command_receiver)
+
+if(POLICY CMP0057)
+  cmake_policy(SET CMP0057 NEW)
+endif()
+
+# Find necessary packages
+find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(joy REQUIRED)
+find_package(serial REQUIRED)  # Ensure serial is found as a package
+
+# Add the executable for your node
+add_executable(servo_controller src/servo_controller.cpp)
+
+# Link libraries to the executable
+ament_target_dependencies(servo_controller rclcpp sensor_msgs joy serial)
+
+# Install the executable
+install(TARGETS
+  servo_controller
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+# Include launch files
+install(DIRECTORY launch
+  DESTINATION share/${PROJECT_NAME}
+)
+
+ament_package()
+
