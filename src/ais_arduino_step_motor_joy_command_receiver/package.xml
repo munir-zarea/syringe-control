@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>ais_arduino_step_motor_joy_command_receiver</name>
+  <version>0.0.0</version>
+  <description>A ROS2 package that integrates joystick input with an Arduino to control a servo motor. The package allows for precise servo positioning based on joystick commands and includes serial communication for interfacing with the Arduino.</description>
+  <maintainer email="zaream@hawaii.edu">munir</maintainer>
+  
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <depend>rclcpp</depend>
+  <depend>sensor_msgs</depend>
+  <depend>joy</depend>
+  <depend>serial</depend>
+
+
+  <export>
+     <build_type>ament_cmake</build_type>
+  </export>
+</package>
