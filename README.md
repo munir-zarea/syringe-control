@@ -1,6 +1,6 @@
 # Syringe-Control
 
-**Syringe-Control** is a ROS2 package that enables servo control using joystick inputs. The servo's position is adjusted based on the joystick's movement, with serial communication between a ROS2 node and an Arduino.
+**Syringe-Control** is a ROS2 package that enables servo control using joystick inputs. The servo's position is adjusted based on the joystick's movement, with device input communication between a ROS2 node and an Arduino.
 
 ## Features
 
