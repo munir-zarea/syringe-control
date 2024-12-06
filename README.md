@@ -42,4 +42,13 @@ Ensure the following are installed on your system:
 
 ### Repository Structure
 
+├── CMakeLists.txt                    # Build system configuration file
+├── launch
+│   └── ais_arduino_step_motor_joy_command_receiver.launch  # Launch file for ROS2 nodes
+├── package.xml                       # ROS2 package metadata
+└── src
+    ├── ais_arduino_step_motor_joy_command_receiver
+    │   └── ais_arduino_step_motor_joy_command_receiver.ino  # Arduino code for motor control
+    └── servo_controller.cpp          # C++ source code for controlling the servo motor
+
 
