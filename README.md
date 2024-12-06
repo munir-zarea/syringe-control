@@ -13,6 +13,8 @@
 
 ## Getting Started
 
+This package (along with the serial package) should be located in your ROS2 workspace. For example, if I open my "ros2_ws" I should navigate to "src" and see my two packages in the folder. Ensure this is the case before moving forward.
+
 ### Prerequisites
 
 Ensure the following are installed on your system:
