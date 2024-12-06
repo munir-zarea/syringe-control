@@ -36,9 +36,10 @@ Ensure the following are installed on your system:
     ```bash
     sudo apt install ros-jazzy-serial
     ```
+    YOU MUST HAVE THIS IN YOUR ROS2 WORKSPACE IN ORDER FOR THE CODE TO WORK. 
 
 ---
 
 ### Repository Structure
 
-TBD
+
