@@ -2,8 +2,8 @@
 <package format="3">
   <name>ais_arduino_step_motor_joy_command_receiver</name>
   <version>0.0.0</version>
-  <description>The ais_arduino_step_motor_joy_command_receiver package</description>
-  <maintainer email="zarea_munir@yahoo.com">munir</maintainer>
+  <description>A ROS2 package that integrates joystick input with an Arduino to control a servo motor. The package allows for precise servo positioning based on joystick commands and includes serial communication for interfacing with the Arduino.</description>
+  <maintainer email="zaream@hawaii.edu">munir</maintainer>
   
   <license>Apache-2.0</license>
 
