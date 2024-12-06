@@ -1,80 +1,88 @@
 #include <rclcpp/rclcpp.hpp>
-#include <linux/joystick.h>  // For joystick input
-#include <fcntl.h>           // For open()
-#include <unistd.h>          // For close(), read()
-#include <stdexcept>
+#include <sensor_msgs/msg/joy.hpp>
+#include <std_msgs/msg/int32.hpp>
+#include <iostream>
+#include <fstream>
 #include <string>
-#include <cstring>
+#include <cmath>
+#include <chrono>
 
 class ServoController : public rclcpp::Node
 {
 public:
-    ServoController() : Node("servo_controller"), last_position_(90)
+    ServoController() : Node("servo_controller"), servo_position_(90)
     {
-        // Declare and retrieve the joystick device parameter
-        this->declare_parameter<std::string>("device_id", "/dev/input/js0");  // Default to /dev/input/js0
-        this->get_parameter("device_id", device_id_);
+        // Initialize joystick subscriber
+        joy_subscriber_ = this->create_subscription<sensor_msgs::msg::Joy>(
+            "/joy", 10,
+            std::bind(&ServoController::joy_callback, this, std::placeholders::_1));
 
-        // Attempt to open the joystick device
-        fd_ = open(device_id_.c_str(), O_RDONLY | O_NONBLOCK);
-        if (fd_ < 0) {
-            RCLCPP_ERROR(this->get_logger(), "Unable to open joystick device: %s", device_id_.c_str());
-            throw std::runtime_error("Failed to open joystick device");
+        // Open serial communication with Arduino
+        serial_port_.open("/dev/ttyACM0", std::ios::out);
+        if (!serial_port_.is_open())
+        {
+            RCLCPP_ERROR(this->get_logger(), "Failed to open serial port: /dev/ttyACM0");
+            rclcpp::shutdown();
         }
 
-        // Start a timer to read joystick events
-        timer_ = this->create_wall_timer(
-            std::chrono::milliseconds(50),
-            std::bind(&ServoController::readJoystick, this));
+        last_update_time_ = this->now(); // Initialize the timer
+
+        RCLCPP_INFO(this->get_logger(), "Servo Controller Node initialized.");
     }
 
     ~ServoController()
     {
-        if (fd_ >= 0) {
-            close(fd_);  // Close the joystick file descriptor
+        if (serial_port_.is_open())
+        {
+            serial_port_.close();
         }
     }
 
 private:
-    void readJoystick()
+    rclcpp::Subscription<sensor_msgs::msg::Joy>::SharedPtr joy_subscriber_;
+    std::ofstream serial_port_; // Serial connection to Arduino
+    int servo_position_;        // Current servo position (90 degrees is neutral)
+    rclcpp::Time last_update_time_; // Time of the last servo command
+
+    void joy_callback(const sensor_msgs::msg::Joy::SharedPtr msg)
     {
-        struct js_event e;
-        while (read(fd_, &e, sizeof(e)) > 0) {
-            // Process joystick events
-            if (e.type == JS_EVENT_BUTTON && e.number == 0) {
-                bool button_pressed = e.value == 1;
-                int servo_position = button_pressed ? 180 : 90;
+        // Assuming the right joystick's vertical axis is axis 4
+        const float dead_zone = 0.05; // Ignore small movements
+        float axis_value = msg->axes[4];
 
-                if (servo_position != last_position_) {
-                    last_position_ = servo_position;
-                    RCLCPP_INFO(this->get_logger(), "Button %s! Setting servo position to: %d",
-                                button_pressed ? "pressed" : "released", servo_position);
-                    // Here, you would send the position to your servo
-                    // (e.g., through a topic or directly to hardware)
-                }
+        // Introduce a delay between commands (e.g., 100 ms)
+        auto current_time = this->now();
+        auto time_diff = current_time - last_update_time_;
+
+        if (std::abs(axis_value) > dead_zone && time_diff > rclcpp::Duration::from_seconds(0.1))
+        {
+            // Adjust the servo position based on joystick movement
+            servo_position_ += static_cast<int>(axis_value * 2); // Scale movement slower
+            servo_position_ = std::clamp(servo_position_, 0, 180); // Limit range
+
+            RCLCPP_INFO(this->get_logger(), "Sending Servo Position: %d", servo_position_);
+
+            // Send the servo position to Arduino via serial
+            if (serial_port_.is_open())
+            {
+                serial_port_ << servo_position_ << '\n';
+                serial_port_.flush(); // Ensure data is sent immediately
             }
-        }
+            else
+            {
+                RCLCPP_ERROR(this->get_logger(), "Serial port not open!");
+            }
 
-        if (errno != EAGAIN) {
-            RCLCPP_ERROR(this->get_logger(), "Error reading joystick events: %s", strerror(errno));
+            // Update the last command time
+            last_update_time_ = current_time;
         }
     }
-
-    std::string device_id_;  // Joystick device ID
-    int fd_;                 // File descriptor for the joystick
-    int last_position_;      // Last known servo position
-
-    rclcpp::TimerBase::SharedPtr timer_;  // Timer for reading joystick events
 };
 
-int main(int argc, char *argv[])
+int main(int argc, char **argv)
 {
     rclcpp::init(argc, argv);
-    try {
-        rclcpp::spin(std::make_shared<ServoController>());
-    } catch (const std::exception &e) {
-        RCLCPP_FATAL(rclcpp::get_logger("rclcpp"), "Exception caught: %s", e.what());
-    }
+    rclcpp::spin(std::make_shared<ServoController>());
     rclcpp::shutdown();
     return 0;
 }
