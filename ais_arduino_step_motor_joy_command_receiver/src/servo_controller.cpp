@@ -1,98 +1,80 @@
 #include <rclcpp/rclcpp.hpp>
-#include <sensor_msgs/msg/joy.hpp>
-#include <serial/serial.h>
+#include <linux/joystick.h>  // For joystick input
+#include <fcntl.h>           // For open()
+#include <unistd.h>          // For close(), read()
 #include <stdexcept>
 #include <string>
+#include <cstring>
 
 class ServoController : public rclcpp::Node
 {
 public:
-    ServoController() : Node("servo_controller"), baudrate_(9600), last_position_(90), servo_active_(false)
+    ServoController() : Node("servo_controller"), last_position_(90)
     {
-        // Declare and retrieve the device path parameter
-        this->declare_parameter<std::string>("serial_port", "/dev/ttyUSB0");  // Default to /dev/ttyUSB0
-        this->get_parameter("serial_port", port_);
+        // Declare and retrieve the joystick device parameter
+        this->declare_parameter<std::string>("device_id", "/dev/input/js0");  // Default to /dev/input/js0
+        this->get_parameter("device_id", device_id_);
 
-        // Attempt to open the serial port
-        try {
-            openSerialPort();
-        } catch (const serial::IOException &e) {
-            RCLCPP_ERROR(this->get_logger(), "Unable to open serial port on startup.");
+        // Attempt to open the joystick device
+        fd_ = open(device_id_.c_str(), O_RDONLY | O_NONBLOCK);
+        if (fd_ < 0) {
+            RCLCPP_ERROR(this->get_logger(), "Unable to open joystick device: %s", device_id_.c_str());
+            throw std::runtime_error("Failed to open joystick device");
         }
 
-        // Subscribe to joystick topic
-        joy_sub_ = this->create_subscription<sensor_msgs::msg::Joy>(
-            "/joy", 10, std::bind(&ServoController::joyCallback, this, std::placeholders::_1));
+        // Start a timer to read joystick events
+        timer_ = this->create_wall_timer(
+            std::chrono::milliseconds(50),
+            std::bind(&ServoController::readJoystick, this));
+    }
+
+    ~ServoController()
+    {
+        if (fd_ >= 0) {
+            close(fd_);  // Close the joystick file descriptor
+        }
     }
 
 private:
-    void openSerialPort()
+    void readJoystick()
     {
-        try {
-            serial_port_.setPort(port_);  // Use the port parameter
-            serial_port_.setBaudrate(baudrate_);
-            serial::Timeout timeout = serial::Timeout::simpleTimeout(1000);
-            serial_port_.setTimeout(timeout);
-            serial_port_.open();
+        struct js_event e;
+        while (read(fd_, &e, sizeof(e)) > 0) {
+            // Process joystick events
+            if (e.type == JS_EVENT_BUTTON && e.number == 0) {
+                bool button_pressed = e.value == 1;
+                int servo_position = button_pressed ? 180 : 90;
 
-            if (serial_port_.isOpen()) {
-                RCLCPP_INFO(this->get_logger(), "Serial port opened successfully on %s.", port_.c_str());
-            }
-        } catch (const serial::IOException &e) {
-            RCLCPP_ERROR(this->get_logger(), "Unable to open serial port on %s.", port_.c_str());
-            throw;
-        }
-    }
-
-    void joyCallback(const sensor_msgs::msg::Joy::SharedPtr msg)
-    {
-        // Check if the button is pressed (button index 0)
-        bool button_pressed = msg->buttons[0] == 1;
-
-        int servo_position = button_pressed ? 180 : 90;  // 180 if pressed, 90 if released
-
-        if (servo_position != last_position_) {
-            last_position_ = servo_position;
-            std::string command = std::to_string(servo_position) + "\n";
-
-            RCLCPP_INFO(this->get_logger(), "Button %s! Setting servo position to: %d",
-                        button_pressed ? "pressed" : "released", servo_position);
-
-            try {
-                if (serial_port_.isOpen()) {
-                    RCLCPP_INFO(this->get_logger(), "Sending command to Arduino: %s", command.c_str());
-                    serial_port_.write(command);
-                } else {
-                    RCLCPP_WARN(this->get_logger(), "Serial port not open. Attempting to reconnect...");
-                    openSerialPort();
+                if (servo_position != last_position_) {
+                    last_position_ = servo_position;
+                    RCLCPP_INFO(this->get_logger(), "Button %s! Setting servo position to: %d",
+                                button_pressed ? "pressed" : "released", servo_position);
+                    // Here, you would send the position to your servo
+                    // (e.g., through a topic or directly to hardware)
                 }
-            } catch (const serial::SerialException &e) {
-                RCLCPP_ERROR(this->get_logger(), "SerialException: %s", e.what());
-                serial_port_.close();  // Close the port if there’s an error
-            } catch (const serial::IOException &e) {
-                RCLCPP_ERROR(this->get_logger(), "IOException: %s", e.what());
-                serial_port_.close();
             }
+        }
+
+        if (errno != EAGAIN) {
+            RCLCPP_ERROR(this->get_logger(), "Error reading joystick events: %s", strerror(errno));
         }
     }
 
-    // Serial parameters
-    serial::Serial serial_port_;
-    std::string port_;
-    int baudrate_;
+    std::string device_id_;  // Joystick device ID
+    int fd_;                 // File descriptor for the joystick
+    int last_position_;      // Last known servo position
 
-    // Last known servo position to avoid redundant commands
-    int last_position_;
-    bool servo_active_;  // Indicates if the servo is active
-
-    // ROS2 Subscriber
-    rclcpp::Subscription<sensor_msgs::msg::Joy>::SharedPtr joy_sub_;
+    rclcpp::TimerBase::SharedPtr timer_;  // Timer for reading joystick events
 };
 
 int main(int argc, char *argv[])
 {
     rclcpp::init(argc, argv);
-    rclcpp::spin(std::make_shared<ServoController>());
+    try {
+        rclcpp::spin(std::make_shared<ServoController>());
+    } catch (const std::exception &e) {
+        RCLCPP_FATAL(rclcpp::get_logger("rclcpp"), "Exception caught: %s", e.what());
+    }
     rclcpp::shutdown();
     return 0;
 }
