@@ -1,27 +1,25 @@
 #include <Servo.h>
 
-Servo myServo;          // Create a Servo object to control the servo motor
-int servoPos = 90;      // Start at a neutral position (90 degrees)
+Servo myServo;
+int current_position = 90; // Start at neutral position
 
-void setup() {
-    Serial.begin(9600);   // Set the baud rate to match the ROS2 node
-    myServo.attach(9);    // Attach the servo to digital pin 9
-    myServo.write(servoPos);  // Move the servo to the starting position
+void setup()
+{
+    Serial.begin(9600);       // Start serial communication
+    myServo.attach(9);        // Attach the servo to pin 9
+    myServo.write(current_position); // Set initial position
+    
 }
 
-void loop() {
-    // Check if there's incoming data on the serial port
-    if (Serial.available() > 0) {
-        int receivedPos = Serial.parseInt();  // Read an integer from the serial input
-
-        // Validate that the position is within the servo's range (0 to 180)
-        if (receivedPos >= 0 && receivedPos <= 180) {
-            servoPos = receivedPos;           // Update the servo position
-            myServo.write(servoPos);          // Move the servo to the new position
-
-            // Optional: Print confirmation to Serial Monitor for debugging
-            Serial.print("Servo moved to: ");
-            Serial.println(servoPos);
+void loop()
+{
+    if (Serial.available() > 0)
+    {
+        int new_position = Serial.parseInt(); // Read the new position from serial input
+        if (new_position > 0 && new_position <= 180)
+        {
+            current_position = new_position;  // Update servo position
+            myServo.write(current_position);  // Move the servo
         }
     }
 }
